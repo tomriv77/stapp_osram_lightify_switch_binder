@@ -35,6 +35,13 @@ def mainPage() {
         section("Select device to turn on/off") {
             input(name: "target1", type: "capability.switch", title: "Which Target?", multiple: false, required: true)
             input(name: "isDimmable", title: "Is Dimmable Device?", type: "bool", required: false, defaultValue: true, submitOnChange: true)
+            input(name: "powerOffTimer", title: "Use Power Off Delay Timer?", type: "bool", required: false, defaultValue: false, submitOnChange: true)
+        }
+        
+        if(powerOffTimer !=  null && powerOffTimer) {
+        	section("Time to wait before turning off device? (1 - 120 minutes)"){
+                input(name: "offTimeInMin", type: "number", range: "1..120", title: "Time in minutes", required: true, default: "15")
+            }
         }
 
         if(isDimmable == null || isDimmable) {
@@ -73,6 +80,25 @@ def updated() {
 def initialize() {
   subscribe(osramSwitch, "button.pushed", buttonPushedHandler)
   subscribe(osramSwitch, "button.held", buttonHeldHandler)
+  subscribe(target1, "switch", switchStateChangeHandler)
+}
+
+def switchStateChangeHandler(evt) {
+	log.debug "New event ${evt.name}, value ${evt.value}"
+	if(evt.name == "switch") {
+    	if(evt.value == "off") {
+        	unschedule()
+        } else if(evt.value == "on") {
+        	unschedule()
+        	runIn(offTimeInMin * 60, turnOffDevice, [overwrite: false])
+        }
+    }
+}
+
+
+def turnOffDevice() {
+	log.debug "turnOffDevice() called"
+	target1.off()
 }
 
 def buttonPushedHandler(evt) {
