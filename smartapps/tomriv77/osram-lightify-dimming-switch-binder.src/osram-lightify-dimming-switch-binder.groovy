@@ -1,8 +1,6 @@
 /**
  *  OSRAM Lightify Dimming Switch Binder
  *
- *  Copyright 2016 Michael Hudson
- *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
  *
@@ -19,9 +17,10 @@ definition(
     author: "Tom Rivera",
     description: "Use to bind a switch any switch or outlet to a OSRAM Lightify Switch",
     category: "Convenience",
-    iconUrl: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience.png",
-    iconX2Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png",
-    iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png")
+    iconUrl: "https://raw.githubusercontent.com/tomriv77/stapp_osram_lightify_switch_binder/master/lightify-icon%401x.jpg",
+    iconX2Url: "https://raw.githubusercontent.com/tomriv77/stapp_osram_lightify_switch_binder/master/lightify-icon%402x.jpg",
+    iconX3Url: "https://raw.githubusercontent.com/tomriv77/stapp_osram_lightify_switch_binder/master/lightify-icon%403x.jpg"
+)
 
 
 preferences {
@@ -31,30 +30,29 @@ preferences {
 def mainPage() {
     dynamicPage(name: "mainPage", install: true, uninstall: true) {
         section("Select OSRAM Lightify Dimming Switch..."){
-            input(name: "switch1", type: "capability.button", title: "Which switch?", required: true)
+            input(name: "osramSwitch", type: "capability.button", title: "Which switch?", required: true)
         }
         section("Select device to turn on/off") {
             input(name: "target1", type: "capability.switch", title: "Which Target?", multiple: false, required: true)
             input(name: "isDimmable", title: "Is Dimmable Device?", type: "bool", required: false, defaultValue: true, submitOnChange: true)
         }
 
-        if(isDimmable != null) {
-            if(isDimmable) {
-            	section("Set level for button 1 hold..."){
-                	input(name: "upLevel", type: "number", range: "10..90", title: "Button 1 level?",  required: true)
-              	}
-              	section("Set level for button 2 hold..."){
-					input(name: "downLevel", type: "number", range: "10..90", title: "Button 2 level?",  required: true)
-				}
-            } else {
-                section {
-                    input(name: "controlSecondDevice", title: "Control Second Device (Hold Buttons)?", type: "bool", required: false, defaultValue: false, submitOnChange: true)
-                }
+        if(isDimmable == null || isDimmable) {
+            section("Set number of light levels to step through (default 3)"){
+                input(name: "levels", type: "number", range: "3..10", title: "Level count?", required: true, default: "3")
+            }
+            section("Select light range") {
+            	 input(name: "maxLevel", type: "number", range: "50..99", title: "Max light level?", required: true, default: "99")
+                 input(name: "minLevel", type: "number", range: "1..50", title: "Min light level?", required: true, default: "10")
+            }
+        } else {
+            section {
+                input(name: "controlSecondDevice", title: "Control Second Device (Hold Buttons)?", type: "bool", required: false, defaultValue: false, submitOnChange: true)
+            }
 
-                if(controlSecondDevice != null && controlSecondDevice) {
-					section ("Secondary device to toggle on/off (press and hold)") {
-                    	input(name: "target2", type: "capability.switch", title: "Which Target?", multiple: false, required: true)
-                    }
+            if(controlSecondDevice != null && controlSecondDevice) {
+                section ("Secondary device to toggle on/off (press and hold)") {
+                    input(name: "target2", type: "capability.switch", title: "Which Target?", multiple: false, required: true)
                 }
             }
         }
@@ -73,8 +71,8 @@ def updated() {
 }
 
 def initialize() {
-  subscribe(switch1, "button.pushed", buttonPushedHandler)
-  subscribe(switch1, "button.held", buttonHeldHandler)
+  subscribe(osramSwitch, "button.pushed", buttonPushedHandler)
+  subscribe(osramSwitch, "button.held", buttonHeldHandler)
 }
 
 def buttonPushedHandler(evt) {
@@ -92,13 +90,19 @@ def buttonHeldHandler(evt) {
     log.debug "buttonHeldHandler invoked with ${evt.data}"
     def buttonNumber = parseJson(evt.data)?.buttonNumber
 
-    if(isDimmable != null && isDimmable) {
+    if(isDimmable == null || isDimmable) {
+    	def currLevel = target1.currentState("level").value as int
+        def levelChange = 100 / (levels - 1)
         if (buttonNumber == 1) {
-            log.debug "Button 1 held (Setting brightness to $upLevel)"
-            targets.setLevel(upLevel)
+        	def upLevel = currLevel + levelChange
+            log.debug "Button 1 held (currLevel is $currLevel, increment brightness by $levelChange)"
+            if(upLevel > maxLevel) upLevel = maxLevel
+            target1.setLevel(upLevel)
         } else {
-            log.debug "Button 2 held (Setting brightness to $downLevel)"
-            targets.setLevel(downLevel)
+        	def downLevel = currLevel - levelChange
+            log.debug "Button 2 held (currLevel is $currLevel, decrement brightness by $levelChange)"
+            if(downLevel < minLevel) downLevel = minLevel
+            target1.setLevel(downLevel)
         }
 
   	} else if (controlSecondDevice != null && controlSecondDevice && target2 != null) {
@@ -108,6 +112,6 @@ def buttonHeldHandler(evt) {
       	} else {
           	log.debug "Button 2 held"
           	target2.off()
-      }
-  }
+      	}
+  	}
 }
